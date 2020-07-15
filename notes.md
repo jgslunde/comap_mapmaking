@@ -1,4 +1,9 @@
 # hdf5
+## Installing on linux:
+```
+sudo apt install libhdf5-serial-dev
+```
+
 ## Compile hdf5 as:
 ```
 g++ test.cpp -o test.o -I/usr/include/hdf5/serial
