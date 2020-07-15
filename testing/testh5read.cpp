@@ -1,7 +1,6 @@
 #include <iostream>
 #include <string>
 #include <H5Cpp.h>
-#include <H5File.h>
 
 using namespace std;
 using namespace H5;
@@ -45,7 +44,7 @@ int main(){
     /*
     * Get dataspace of the dataset.
     */
-    DataSpace dataspace = dataset.getSpace();
+        DataSpace dataspace = dataset.getSpace();
     /*
     * Get the number of dimensions in the dataspace.
     */
