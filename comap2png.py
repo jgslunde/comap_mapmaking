@@ -8,37 +8,54 @@ import ctypes
 t1 = time.time()
 print("Imports: %.4f" % (t1-t0))
 
-USE_CTYPES = True
+USE_CTYPES = False
 USE_GNUPLOT = True
 
 class COMAP2PNG:
-    def __init__(self):
+    def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath=""):
+
+        self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
+
+        if from_commandline:
+            parser = argparse.ArgumentParser()
+            parser.add_argument("filename", type=str)
+            parser.add_argument("-d", "--detectors", type=str, default="range(1,20)", help="List of detectors(feeds), on format which evals to Python list or iterable, e.g. [1,4,9] or range(2,6).")
+            parser.add_argument("-s", "--sidebands", type=str, default="range(1,5)", help="List of sidebands, on format which evals to Python list or iterable, e.g. [1,2] or range(1,3).")
+            parser.add_argument("-f", "--frequencies", type=str, default="range(1,65)", help="List of frequencies, on format which evals to Python list or iterable, e.g. [34,36,41] or range(12,44).")
+            parser.add_argument("-m", "--maptype", type=str, default="map")
+            parser.add_argument("-o", "--outname", type=str, default="outfile")
+            parser.add_argument("-p", "--outpath", type=str, default="")
+            args = parser.parse_args()
+            try:
+                self.feeds       = np.array(eval(args.detectors))
+                self.sidebands   = np.array(eval(args.sidebands))
+                self.frequencies = np.array(eval(args.frequencies))
+            except:
+                raise ValueError("Could not resolve detectors, sidebands, or frequencies as a Python iterable.")
+            self.filename   = args.filename
+            self.maptype    = args.maptype
+            self.outpath    = args.outpath
+            self.outname    = args.outname
+
+        else:
+            self.feeds       = np.array(feeds)
+            self.sidebands   = np.array(sidebands)
+            self.frequencies = np.array(frequencies)
+            self.maptype     = maptype
+            self.outpath     = outpath
+            self.outname     = outname
+            self.filename    = filename
+            if len(filename) < 0:
+                raise ValueError("You must provide an input filename.")
+            
         self.parse_arguments()
 
 
     def parse_arguments(self):
-        parser = argparse.ArgumentParser()
-        parser.add_argument("filename", type=str)
-        parser.add_argument("-d", "--detectors", type=str, default="range(1,20)", help="List of detectors(feeds), on format which evals to Python list or iterable, e.g. [1,4,9] or range(2,6).")
-        parser.add_argument("-s", "--sidebands", type=str, default="range(1,5)", help="List of sidebands, on format which evals to Python list or iterable, e.g. [1,2] or range(1,3).")
-        parser.add_argument("-f", "--frequencies", type=str, default="range(1,65)", help="List of frequencies, on format which evals to Python list or iterable, e.g. [34,36,41] or range(12,44).")
-        parser.add_argument("-m", "--maptype", type=str, default="map")
-        args = parser.parse_args()
         
-        self.filename    = args.filename
+        if not self.maptype in self.avail_maps:
+            raise ValueError("Don't recognize map type %s. Available types are %s" % (self.maptype, str(self.avail_maps)))
         
-        self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
-        if args.maptype in self.avail_maps:
-            self.maptype = args.maptype
-        else:
-            raise ValueError("Don't recognize map type %s. Available types are %s" % (args.maptype, str(self.avail_maps)))
-        
-        try:
-            self.feeds       = np.array(eval(args.detectors))
-            self.sidebands   = np.array(eval(args.sidebands))
-            self.frequencies = np.array(eval(args.frequencies))
-        except:
-            raise ValueError("Could not resolve detectors, sidebands, or frequencies as a Python iterable.")
         
         if (self.feeds < 1).any() or (self.feeds > 19).any():
             raise ValueError("Feeds must be in range 1-19.")
@@ -75,9 +92,9 @@ class COMAP2PNG:
         t2 = time.time()
         self.plot_maps()
         t3 = time.time()
-        print(t1-t0)
-        print(t2-t1)
-        print(t3-t2)
+        print("Reading h5 files: %.4f" % (t1-t0))
+        print("Calculating maps: %.4f" % (t2-t1))
+        print("Writing map to png: %.4f" % (t3-t2))
 
 
     def read_h5(self):
@@ -92,7 +109,6 @@ class COMAP2PNG:
             self.map_full = h5file["map_beam"][self.indexing[1:]][None,:,:,:,:]  # Beam doesn't contain first index, so skip it,
             self.rms_full = h5file["rms_beam"][self.indexing[1:]][None,:,:,:,:]  # Then add empty feed dim,
             self.hit_full = h5file["nhit_beam"][self.indexing[1:]][None,:,:,:,:] # easier compatability with later code.
-            print(self.map_full.shape)
         else:
             self.map_full = h5file["map"][self.indexing]
             self.rms_full = h5file["rms"][self.indexing]
@@ -104,8 +120,8 @@ class COMAP2PNG:
     def make_maps(self):
         
         map_full, rms_full, hit_full = self.map_full, self.rms_full, self.hit_full
+        nfeed, nband, nfreq, nx, ny = self.map_full.shape
         if USE_CTYPES:  # Ctypes implementation (much faster).
-            nfeed, nband, nfreq, nx, ny = self.map_full.shape
             map_out = np.zeros((ny,nx), dtype=np.float32)
             rms_out = np.zeros((ny,nx), dtype=np.float32)
             hit_out = np.zeros((ny,nx), dtype=np.int32)
@@ -127,7 +143,19 @@ class COMAP2PNG:
             map_out = np.nansum(map_full*inv2_hit_rms_full, axis=(0,1,2))
             rms_out = np.nansum(inv2_hit_rms_full, axis=(0,1,2))
             hit_out = np.nansum(hit_full, axis=(0,1,2))
-
+            self.var_out = np.zeros((nx,ny))
+            if self.maptype == "var":
+                # for x in range(nx):
+                #     for y in range(ny):
+                #         tempdata = []
+                #         for i in range(nfeed):
+                #             for j in range(nband):
+                #                 for k in range(nfreq):
+                #                     if rms_full[i,j,k,x,y] != 0:
+                #                         tempdata.append(map_full[i,j,k,x,y]/rms_full[i,j,k,x,y])
+                #         self.var_out[x,y] = np.var(tempdata)
+                self.var_out = np.var(map_full/np.where(rms_full != 0, rms_full, 1.0), axis=(0,1,2))
+ 
         map_out = map_out/np.where(rms_out==0, np.inf, rms_out)
         rms_out = np.sqrt(1.0/np.where(rms_out==0, np.inf, rms_out))
         
@@ -147,33 +175,37 @@ class COMAP2PNG:
             plotdata = self.hit_out
         elif self.maptype == "map_rms":
             plotdata = self.map_out/self.rms_out
-        # elif self.maptype == "var":
-        #     plotdata = self.var_out
+        elif self.maptype == "var":
+            plotdata = self.var_out
         # elif self.maptype == "feed":
-        #     plotdata = self.seedbyfeed_out
+        #     plotdata = self.seenbyfeed_out
         # elif self.maptype == "sim":
         #     plotdata = self.sim_out
         # elif self.maptype == "sim_rms":
         #     plotdata = self.simrms_out
-        # plotdata = np.ma.masked_where(self.hit_out < 1, plotdata)
-        plotdata[self.hit_out < 1] = np.nan
+        plotdata = np.ma.masked_where(self.hit_out < 1, plotdata)
+        # plotdata[self.hit_out < 1] = np.nan
 
         x, y = self.x, self.y
         dx = x[1] - x[0]
         x_lim[0] = x[0] - 0.5*dx; x_lim[1] = x[-1] + 0.5*dx
         dy = y[1] - y[0]
         y_lim[0] = y[1] - 0.5*dy; y_lim[1] = y[-1] + 0.5*dy
-
+        
         if USE_GNUPLOT:
             import PyGnuplot as gp
             
             gp.s(plotdata)
             gp.c('set term png')
-            gp.c('set output "%s"' % (self.maptype+".png"))
-            
-            gp.c('set cbrange [%d:%d]' % (color_lim[0], color_lim[1]))
-            gp.c('set size ratio 5.0/9.0')
-            gp.c('plot "tmp.dat" matrix using (%f+$1*%f):(%f+$2*%f):3 with image' % (x_lim[0], dx, y_lim[0], dy))
+            gp.c('set output "%s"' % (self.outpath + self.outname + ".png"))
+            # print((x_lim[1]-x_lim[0])/y_lim[1]-y_lim[0]))
+            if color_lim[0] is not None and color_lim[1] is not None:
+                gp.c('set cbrange [%d:%d]' % (color_lim[0], color_lim[1]))
+            gp.c('set size ratio %f' % ((y_lim[1]-y_lim[0])/(x_lim[1]-x_lim[0])))
+            gp.c("set xrange[%f:%f]" % (x_lim[0], x_lim[1]))
+            gp.c("set yrange[%f:%f]" % (y_lim[0], y_lim[1]))
+            gp.c('set datafile missing "--"')
+            gp.c('plot "tmp.dat" matrix using (%f+$1*%f):(%f+$2*%f):3 with image title ""' % (x_lim[0], dx, y_lim[0], dy))
 
         else:            
             from matplotlib.pyplot import subplots
@@ -185,12 +217,12 @@ class COMAP2PNG:
             plot = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest', aspect='equal', cmap=cm.CMRmap, origin='lower', vmin=color_lim[0], vmax=color_lim[1])
             fig.colorbar(plot)
             t00 = time.time()
-            fig.savefig("%s.png" % self.maptype)
+            fig.savefig(self.outpath + self.outname + ".png")
             t11 = time.time()
             print("savefig: ", t11-t00)
 
     
 
-# if __name__ == "__main__":
-map2png = COMAP2PNG()
-map2png.run()
+if __name__ == "__main__":
+    map2png = COMAP2PNG()
+    map2png.run()
