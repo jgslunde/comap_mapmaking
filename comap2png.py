@@ -1,7 +1,7 @@
 import time
 t0 = time.time()
-import h5py
 import numpy as np
+import h5py
 from tqdm import trange
 import argparse
 import ctypes
@@ -9,12 +9,13 @@ t1 = time.time()
 print("Imports: %.4f" % (t1-t0))
 
 USE_CTYPES = False
-USE_GNUPLOT = True
+USE_GNUPLOT = False
 
 class COMAP2PNG:
-    def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath=""):
+    def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath="", plottype="png"):
 
         self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
+        self.avail_plottypes = ["png", "gif", "mp4"]
 
         if from_commandline:
             parser = argparse.ArgumentParser()
@@ -25,6 +26,7 @@ class COMAP2PNG:
             parser.add_argument("-m", "--maptype", type=str, default="map")
             parser.add_argument("-o", "--outname", type=str, default="outfile")
             parser.add_argument("-p", "--outpath", type=str, default="")
+            parser.add_argument("-t", "--plottype", type=str, default="png", help="Choose from png, gif, mp4.")
             args = parser.parse_args()
             try:
                 self.feeds       = np.array(eval(args.detectors))
@@ -36,6 +38,7 @@ class COMAP2PNG:
             self.maptype    = args.maptype
             self.outpath    = args.outpath
             self.outname    = args.outname
+            self.plottype   = args.plottype
 
         else:
             self.feeds       = np.array(feeds)
@@ -45,6 +48,7 @@ class COMAP2PNG:
             self.outpath     = outpath
             self.outname     = outname
             self.filename    = filename
+            self.plottype    = plottype
             if len(filename) < 0:
                 raise ValueError("You must provide an input filename.")
             
@@ -74,14 +78,15 @@ class COMAP2PNG:
                 self.indexing.append(slice(item[0]-1, item[-1]))  # Same as above.
         self.indexing = tuple(self.indexing)  # Tuples are nice for slicing.
 
-        if len(self.feeds) == 19:
+        if len(self.feeds) == 19 and not self.maptype == "feed":
+            # If we want to average over all feeds, and also don't want a "seenbyfeed" map, we can use the _beam datasets instead of the full ones.
             self.all_feeds = True
         else:
             self.all_feeds = False
 
                 
         if non_continuous > 1:
-            raise ValueError("At most one of detectors, sidebands and frequencies may have gaps in their values (e.g. [2,3,6].)")
+            raise ValueError("At most one of detectors, sidebands and frequencies may have gaps in their values (gap meaning ex: [1,2,3,6].)")
         
 
     def run(self):
@@ -121,6 +126,8 @@ class COMAP2PNG:
         
         map_full, rms_full, hit_full = self.map_full, self.rms_full, self.hit_full
         nfeed, nband, nfreq, nx, ny = self.map_full.shape
+
+
         if USE_CTYPES:  # Ctypes implementation (much faster).
             map_out = np.zeros((ny,nx), dtype=np.float32)
             rms_out = np.zeros((ny,nx), dtype=np.float32)
@@ -136,15 +143,16 @@ class COMAP2PNG:
                                         ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
             maplib.makemaps(map_full, rms_full, hit_full, map_out, rms_out, hit_out, nfeed, nband, nfreq, nx, ny)
 
+
         else:  # Pure Numpy version.
             nx, ny = self.nx, self.ny
-            inv2_hit_rms_full = np.where(hit_full != 0, np.divide(1.0, rms_full**2, out=np.zeros_like(rms_full), where=rms_full!=0), 0.0)
+            if self.plottype == "png":  # If we're plotting a png, we sum over sidebands/freqs.
+                sum_axis = (0,1,2)      # If we're plotting a movie or gif, we don't.
+            else:
+                sum_axis = (0)
 
-            map_out = np.nansum(map_full*inv2_hit_rms_full, axis=(0,1,2))
-            rms_out = np.nansum(inv2_hit_rms_full, axis=(0,1,2))
-            hit_out = np.nansum(hit_full, axis=(0,1,2))
-            self.var_out = np.zeros((nx,ny))
             if self.maptype == "var":
+                # self.var_out = np.zeros((nx,ny))
                 # for x in range(nx):
                 #     for y in range(ny):
                 #         tempdata = []
@@ -154,12 +162,19 @@ class COMAP2PNG:
                 #                     if rms_full[i,j,k,x,y] != 0:
                 #                         tempdata.append(map_full[i,j,k,x,y]/rms_full[i,j,k,x,y])
                 #         self.var_out[x,y] = np.var(tempdata)
-                self.var_out = np.var(map_full/np.where(rms_full != 0, rms_full, 1.0), axis=(0,1,2))
- 
-        map_out = map_out/np.where(rms_out==0, np.inf, rms_out)
-        rms_out = np.sqrt(1.0/np.where(rms_out==0, np.inf, rms_out))
-        
-        self.map_out, self.rms_out, self.hit_out = map_out, rms_out, hit_out
+                self.var_out = np.var(map_full/np.where(rms_full != 0, rms_full, 1.0), axis=sum_axis)                
+            else:
+                inv2_hit_rms_full = np.where(hit_full != 0, np.divide(1.0, rms_full**2, out=np.zeros_like(rms_full), where=rms_full!=0), 0.0)
+                self.map_out = np.nansum(map_full*inv2_hit_rms_full, axis=sum_axis)
+                self.rms_out = np.nansum(inv2_hit_rms_full, axis=sum_axis)
+                self.hit_out = np.nansum(hit_full, axis=sum_axis)
+
+                self.map_out = self.map_out/np.where(self.rms_out==0, np.inf, self.rms_out)
+                self.rms_out = np.sqrt(1.0/np.where(self.rms_out==0, np.inf, self.rms_out))
+
+        if self.maptype == "feed":
+            hitbyfeed = np.sum(hit_full, axis=(1,2))
+            self.feed_out = np.sum(hitbyfeed > 0.01*hit_out, axis=0)
 
     
     def plot_maps(self):
@@ -167,8 +182,9 @@ class COMAP2PNG:
 
         if self.maptype == "map":
             plotdata = self.map_out*1e6
-            color_lim[1] = 0.1*np.nanmax(plotdata)
+            color_lim[1] = 2*np.std(plotdata)
             color_lim[0] = -color_lim[1]
+            print("Portion of map inside crange: %.3f" % (np.sum(np.abs(plotdata) < color_lim[1])/np.size(plotdata)))
         elif self.maptype == "rms":
             plotdata = self.rms_out
         elif self.maptype == "hit":
@@ -177,8 +193,8 @@ class COMAP2PNG:
             plotdata = self.map_out/self.rms_out
         elif self.maptype == "var":
             plotdata = self.var_out
-        # elif self.maptype == "feed":
-        #     plotdata = self.seenbyfeed_out
+        elif self.maptype == "feed":
+            plotdata = self.feed_out
         # elif self.maptype == "sim":
         #     plotdata = self.sim_out
         # elif self.maptype == "sim_rms":
@@ -191,7 +207,7 @@ class COMAP2PNG:
         x_lim[0] = x[0] - 0.5*dx; x_lim[1] = x[-1] + 0.5*dx
         dy = y[1] - y[0]
         y_lim[0] = y[1] - 0.5*dy; y_lim[1] = y[-1] + 0.5*dy
-        
+
         if USE_GNUPLOT:
             import PyGnuplot as gp
             
@@ -207,21 +223,56 @@ class COMAP2PNG:
             gp.c('set datafile missing "--"')
             gp.c('plot "tmp.dat" matrix using (%f+$1*%f):(%f+$2*%f):3 with image title ""' % (x_lim[0], dx, y_lim[0], dy))
 
-        else:            
-            from matplotlib.pyplot import subplots
-            import matplotlib.cm as cm
-            cm.CMRmap.set_bad('0.8',1) #color of masked elements 
-            fig, ax = subplots()
+        else:
+            import matplotlib.pyplot as plt
+            import matplotlib
+            matplotlib.use("Agg")  # No idea what this is. It resolves an error when writing gif/mp4.
+            cmap_name = "CMRmap"
+            cmap = plt.get_cmap(cmap_name)
+            # cmap.set_bad("0.8", 1) # Set color of masked elements to gray.
+            fig, ax = plt.subplots()
             fig.set_figheight(5)
             fig.set_figwidth(9)
-            plot = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest', aspect='equal', cmap=cm.CMRmap, origin='lower', vmin=color_lim[0], vmax=color_lim[1])
-            fig.colorbar(plot)
-            t00 = time.time()
-            fig.savefig(self.outpath + self.outname + ".png")
-            t11 = time.time()
-            print("savefig: ", t11-t00)
+            ax.set_ylabel('Declination [deg]')
+            ax.set_xlabel('Right Ascension [deg]')
 
-    
+            if self.plottype == "png":
+                img = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
+                                    aspect='equal', cmap=cmap, origin='lower',
+                                    vmin=color_lim[0], vmax=color_lim[1])
+                fig.colorbar(img)
+                fig.savefig(self.outpath + self.outname + ".png")
+
+            elif self.plottype in ["mp4", "gif"]:
+                import matplotlib.animation as animation
+
+                img = ax.imshow(plotdata[0,0], extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
+                                    aspect='equal', cmap=cmap, origin='lower',
+                                    vmin=color_lim[0], vmax=color_lim[1])
+                fig.colorbar(img)
+
+                if self.plottype == "mp4": # The first handful of frames stutter a lot (no idea why),
+                    holdframes = 4         # so we render some static frames first (only an issue with mp4).
+                else:
+                    holdframes = 0
+
+                def update(i):
+                    if i < holdframes:
+                        i = 0
+                    else:
+                        i -= holdframes
+                    f = i%len(self.frequencies)
+                    s = i//len(self.frequencies)
+                    img.set_data(plotdata[s,f])
+                    ax.set_title("Sideband %d | Channel %d | Freq %.2f GHz" % (s, i, self.freq[s,f]))
+                    return [img]
+                ani = animation.FuncAnimation(fig, update, frames=len(self.frequencies)*len(self.sidebands)+holdframes, interval=200, blit=False, repeat_delay=1000)
+
+                if self.plottype == "gif":
+                    ani.save("test.gif", writer="imagemagick")
+                elif self.plottype == "mp4":
+                    ani.save("test.mp4", writer="ffmpeg")
+
 
 if __name__ == "__main__":
     map2png = COMAP2PNG()
