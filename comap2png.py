@@ -16,7 +16,7 @@ class COMAP2PNG:
 
         self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
         self.avail_plottypes = ["png", "gif", "mp4"]
-        self.sideband_names = ["Lower A", "Lower B", "Upper A", "Upper B"]
+        self.sideband_names = ["A:LSB", "B:LSB", "A:USB", "B:USB"]
 
         if from_commandline:
             parser = argparse.ArgumentParser()
@@ -250,28 +250,12 @@ class COMAP2PNG:
                 img = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect='equal', cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
-                title = ""
-                title += "Maptype: " + self.maptype + " | "
-                title += str(self.filename) + "\n"
-                if len(self.sidebands) == 4:
-                    title += "Sidebands: all"
-                elif len(self.sidebands) == 1:
-                    title += "Sideband: " + self.sideband_names[self.sidebands[0]-1]
-                else:
-                    title += "Sidebands: " + str([self.sideband_names[s-1] for s in self.sidebands])
-                title += " | "
-                if len(self.frequencies) == 64:
-                    title += "Channels: all"
-                elif len(self.frequencies) == 1:
-                    title += "Channel: %d | Freq: %.3f GHz" % (self.frequencies[0], self.freq[self.frequencies[0]])
-                elif ((self.frequencies[1:] - self.frequencies[:-1]) == 1).all():
-                    title += "Channels: %d-%d | Freqs: %.3f - %.3f GHz" % ((self.frequencies[0], self.frequencies[-1], self.freq[self.sidebands[0]][self.frequencies[0]], self.freq[self.sidebands[0]][self.frequencies[-1]]))
-                else:
-                    title += "Channels: " + str(self.frequencies)
 
+                title = self.make_title()
                 ax.set_title(title)
                 # ax.set_title("Sideband: %s | Channel: %d | Freq: %.3f GHz" % (self.sideband_names[s], i%64, self.freq[s,f]))
-                fig.colorbar(img)
+                cbar = fig.colorbar(img)
+                cbar.set_label("$\mu K$")
                 fig.savefig(self.outpath + self.outname + ".png")
 
             elif self.plottype in ["mp4", "gif"]:
@@ -306,6 +290,37 @@ class COMAP2PNG:
                 elif self.plottype == "mp4":
                     ani.save(self.outpath + self.outname + ".mp4", writer="ffmpeg")
 
+
+
+    def make_title(self):
+        title = ""
+        title += "Maptype: " + self.maptype + " | "
+        title += str(self.filename) + "\n"
+        if len(self.feeds) == 19:
+            title += "Feeds: all"
+        elif len(self.feeds) == 1:
+            title += "Feed: %d" % self.feeds[0]
+        elif ((self.feeds[1:] - self.feeds[:-1]) == 1).all():
+            title += "Feeds: %d-%d" % (self.feeds[0], self.feeds[-1])
+        else:
+            title += "Feeds: " + ", ".join([str(feed) for feed in self.feeds])
+        title += " | "
+        if len(self.sidebands) == 4:
+            title += "All SB"
+        elif len(self.sidebands) == 1:
+            title += self.sideband_names[self.sidebands[0]-1]
+        else:
+            title += " + ".join([self.sideband_names[s-1] for s in self.sidebands])
+        title += " | "
+        if len(self.frequencies) == 64:
+            title += "All ch."
+        elif len(self.frequencies) == 1:
+            title += "Ch.: %d | Freq: %.3f GHz" % (self.frequencies[0], self.freq[self.sidebands[0]][self.frequencies[0]])
+        elif ((self.frequencies[1:] - self.frequencies[:-1]) == 1).all():
+            title += "Ch.: %d-%d | Freqs: %.3f - %.3f GHz" % ((self.frequencies[0], self.frequencies[-1], self.freq[self.sidebands[0]][self.frequencies[0]], self.freq[self.sidebands[0]][self.frequencies[-1]]))
+        else:
+            title += "Ch.: " + ", ".join([str(freq) for freq in self.frequencies])
+        return title
 
 if __name__ == "__main__":
     map2png = COMAP2PNG()
