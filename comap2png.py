@@ -16,13 +16,14 @@ class COMAP2PNG:
 
         self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
         self.avail_plottypes = ["png", "gif", "mp4"]
+        self.sideband_names = ["Lower A", "Lower B", "Upper A", "Upper B"]
 
         if from_commandline:
             parser = argparse.ArgumentParser()
             parser.add_argument("filename", type=str)
             parser.add_argument("-d", "--detectors", type=str, default="range(1,20)", help="List of detectors(feeds), on format which evals to Python list or iterable, e.g. [1,4,9] or range(2,6).")
-            parser.add_argument("-s", "--sidebands", type=str, default="range(1,5)", help="List of sidebands, on format which evals to Python list or iterable, e.g. [1,2] or range(1,3).")
-            parser.add_argument("-f", "--frequencies", type=str, default="range(1,65)", help="List of frequencies, on format which evals to Python list or iterable, e.g. [34,36,41] or range(12,44).")
+            parser.add_argument("-s", "--sidebands", type=str, default="range(1,5)", help="List of sidebands, on format which evals to Python list or iterable, e.g. [1,2], [3], or range(1,3).")
+            parser.add_argument("-f", "--frequencies", type=str, default="range(1,65)", help="List of frequencies, on format which evals to Python list or iterable, e.g. [34,36,41], [43], or range(12,44). Note that if you specify a frequency, a single sideband must be selected.")
             parser.add_argument("-m", "--maptype", type=str, default="map")
             parser.add_argument("-o", "--outname", type=str, default="outfile")
             parser.add_argument("-p", "--outpath", type=str, default="")
@@ -59,14 +60,17 @@ class COMAP2PNG:
         
         if not self.maptype in self.avail_maps:
             raise ValueError("Don't recognize map type %s. Available types are %s" % (self.maptype, str(self.avail_maps)))
-        
-        
+
         if (self.feeds < 1).any() or (self.feeds > 19).any():
             raise ValueError("Feeds must be in range 1-19.")
         if (self.sidebands < 1).any() or (self.sidebands > 4).any():
             raise ValueError("Sidebands must be in range 1-4.")
         if (self.frequencies < 1).any() or (self.frequencies > 64).any():
             raise ValueError("Frequencies must be in range 1-64.")
+    
+        if len(self.frequencies) != 64:
+            if len(self.sidebands) != 1:
+                raise ValueError("If you specify frequencies, you must specify a single sideband.")
             
         self.indexing = []
         non_continuous = 0
@@ -173,8 +177,11 @@ class COMAP2PNG:
                 self.rms_out = np.sqrt(1.0/np.where(self.rms_out==0, np.inf, self.rms_out))
 
         if self.maptype == "feed":
-            hitbyfeed = np.sum(hit_full, axis=(1,2))
-            self.feed_out = np.sum(hitbyfeed > 0.01*hit_out, axis=0)
+            if self.plottype == "png":
+                hitbyfeed = np.sum(hit_full, axis=(1,2))
+            elif self.plottype in ["gif", "mp4"]:
+                hitbyfeed = hit_full
+            self.feed_out = np.sum(hitbyfeed > 0.01*self.hit_out, axis=0)
 
     
     def plot_maps(self):
@@ -182,13 +189,16 @@ class COMAP2PNG:
 
         if self.maptype == "map":
             plotdata = self.map_out*1e6
-            color_lim[1] = 2*np.std(plotdata)
+            color_lim[1] = 1*np.std(plotdata)
             color_lim[0] = -color_lim[1]
             print("Portion of map inside crange: %.3f" % (np.sum(np.abs(plotdata) < color_lim[1])/np.size(plotdata)))
         elif self.maptype == "rms":
-            plotdata = self.rms_out
+            plotdata = self.rms_out*1e6
+            color_lim = 0, 1*np.std(plotdata)
+            print("Portion of map inside crange: %.3f" % (np.sum(np.abs(plotdata) < color_lim[1])/np.size(plotdata)))
         elif self.maptype == "hit":
             plotdata = self.hit_out
+            color_lim = np.min(plotdata), np.max(plotdata)
         elif self.maptype == "map_rms":
             plotdata = self.map_out/self.rms_out
         elif self.maptype == "var":
@@ -214,7 +224,6 @@ class COMAP2PNG:
             gp.s(plotdata)
             gp.c('set term png')
             gp.c('set output "%s"' % (self.outpath + self.outname + ".png"))
-            # print((x_lim[1]-x_lim[0])/y_lim[1]-y_lim[0]))
             if color_lim[0] is not None and color_lim[1] is not None:
                 gp.c('set cbrange [%d:%d]' % (color_lim[0], color_lim[1]))
             gp.c('set size ratio %f' % ((y_lim[1]-y_lim[0])/(x_lim[1]-x_lim[0])))
@@ -226,10 +235,11 @@ class COMAP2PNG:
         else:
             import matplotlib.pyplot as plt
             import matplotlib
+            import copy
             matplotlib.use("Agg")  # No idea what this is. It resolves an error when writing gif/mp4.
             cmap_name = "CMRmap"
-            cmap = plt.get_cmap(cmap_name)
-            # cmap.set_bad("0.8", 1) # Set color of masked elements to gray.
+            cmap = copy.copy(plt.get_cmap(cmap_name))
+            cmap.set_bad("0.8", 1) # Set color of masked elements to gray.
             fig, ax = plt.subplots()
             fig.set_figheight(5)
             fig.set_figwidth(9)
@@ -240,6 +250,27 @@ class COMAP2PNG:
                 img = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect='equal', cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
+                title = ""
+                title += "Maptype: " + self.maptype + " | "
+                title += str(self.filename) + "\n"
+                if len(self.sidebands) == 4:
+                    title += "Sidebands: all"
+                elif len(self.sidebands) == 1:
+                    title += "Sideband: " + self.sideband_names[self.sidebands[0]-1]
+                else:
+                    title += "Sidebands: " + str([self.sideband_names[s-1] for s in self.sidebands])
+                title += " | "
+                if len(self.frequencies) == 64:
+                    title += "Channels: all"
+                elif len(self.frequencies) == 1:
+                    title += "Channel: %d | Freq: %.3f GHz" % (self.frequencies[0], self.freq[self.frequencies[0]])
+                elif ((self.frequencies[1:] - self.frequencies[:-1]) == 1).all():
+                    title += "Channels: %d-%d | Freqs: %.3f - %.3f GHz" % ((self.frequencies[0], self.frequencies[-1], self.freq[self.sidebands[0]][self.frequencies[0]], self.freq[self.sidebands[0]][self.frequencies[-1]]))
+                else:
+                    title += "Channels: " + str(self.frequencies)
+
+                ax.set_title(title)
+                # ax.set_title("Sideband: %s | Channel: %d | Freq: %.3f GHz" % (self.sideband_names[s], i%64, self.freq[s,f]))
                 fig.colorbar(img)
                 fig.savefig(self.outpath + self.outname + ".png")
 
@@ -264,14 +295,16 @@ class COMAP2PNG:
                     f = i%len(self.frequencies)
                     s = i//len(self.frequencies)
                     img.set_data(plotdata[s,f])
-                    ax.set_title("Sideband %d | Channel %d | Freq %.2f GHz" % (s, i, self.freq[s,f]))
+                    title = "Maptype: " + self.maptype + " | " + self.filename + "\n"
+                    title += "Sideband %s | Channel %d | Freq %.2f GHz" % (self.sideband_names[s], i%64, self.freq[s,f])
+                    ax.set_title(title)
                     return [img]
                 ani = animation.FuncAnimation(fig, update, frames=len(self.frequencies)*len(self.sidebands)+holdframes, interval=200, blit=False, repeat_delay=1000)
 
                 if self.plottype == "gif":
-                    ani.save("test.gif", writer="imagemagick")
+                    ani.save(self.outpath + self.outname + ".gif", writer="imagemagick")
                 elif self.plottype == "mp4":
-                    ani.save("test.mp4", writer="ffmpeg")
+                    ani.save(self.outpath + self.outname + ".mp4", writer="ffmpeg")
 
 
 if __name__ == "__main__":
