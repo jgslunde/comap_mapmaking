@@ -115,9 +115,14 @@ class COMAP2PNG:
         self.freq = h5file["freq"][()]
 
         if self.all_feeds:  # If we're reading all feeds, we can use the "beam" dataset.
-            self.map_full = h5file["map_beam"][self.indexing[1:]][None,:,:,:,:]  # Beam doesn't contain first index, so skip it,
-            self.rms_full = h5file["rms_beam"][self.indexing[1:]][None,:,:,:,:]  # Then add empty feed dim,
-            self.hit_full = h5file["nhit_beam"][self.indexing[1:]][None,:,:,:,:] # easier compatability with later code.
+            try:
+                self.map_full = h5file["map_beam"][self.indexing[1:]][None,:,:,:,:]  # Beam doesn't contain first index, so skip it,
+                self.rms_full = h5file["rms_beam"][self.indexing[1:]][None,:,:,:,:]  # Then add empty feed dim,
+                self.hit_full = h5file["nhit_beam"][self.indexing[1:]][None,:,:,:,:] # easier compatability with later code.
+            except KeyError:
+                self.map_full = h5file["map_coadd"][self.indexing[1:]][None,:,:,:,:]  # Beam doesn't contain first index, so skip it,
+                self.rms_full = h5file["rms_coadd"][self.indexing[1:]][None,:,:,:,:]  # Then add empty feed dim,
+                self.hit_full = h5file["nhit_coadd"][self.indexing[1:]][None,:,:,:,:] # easier compatability with later code.
         else:
             self.map_full = h5file["map"][self.indexing]
             self.rms_full = h5file["rms"][self.indexing]
@@ -226,7 +231,8 @@ class COMAP2PNG:
             gp.c('set output "%s"' % (self.outpath + self.outname + ".png"))
             if color_lim[0] is not None and color_lim[1] is not None:
                 gp.c('set cbrange [%d:%d]' % (color_lim[0], color_lim[1]))
-            gp.c('set size ratio %f' % ((y_lim[1]-y_lim[0])/(x_lim[1]-x_lim[0])))
+            #gp.c('set size ratio %f' % ((y_lim[1]-y_lim[0])/(x_lim[1]-x_lim[0])))
+            gp.c('set size ratio -1' % ((y_lim[1]-y_lim[0])/(x_lim[1]-x_lim[0])))
             gp.c("set xrange[%f:%f]" % (x_lim[0], x_lim[1]))
             gp.c("set yrange[%f:%f]" % (y_lim[0], y_lim[1]))
             gp.c('set datafile missing "--"')
@@ -245,9 +251,9 @@ class COMAP2PNG:
             fig.set_figwidth(9)
             ax.set_ylabel('Declination [deg]')
             ax.set_xlabel('Right Ascension [deg]')
-
+            ax.axis("equal")
             if self.plottype == "png":
-                img = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
+                img = ax.imshow(plotdata.T, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect='equal', cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
 
@@ -261,7 +267,7 @@ class COMAP2PNG:
             elif self.plottype in ["mp4", "gif"]:
                 import matplotlib.animation as animation
 
-                img = ax.imshow(plotdata[0,0], extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
+                img = ax.imshow(plotdata[0,0].T, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect='equal', cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
                 fig.colorbar(img)
