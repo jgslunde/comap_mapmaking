@@ -12,7 +12,7 @@ USE_CTYPES = False
 USE_GNUPLOT = False
 
 class COMAP2PNG:
-    def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath="", plottype="png"):
+    def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath="", plottype="png", colorbarlims="[None, None]"):
 
         self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
         self.avail_plottypes = ["png", "gif", "mp4"]
@@ -28,13 +28,15 @@ class COMAP2PNG:
             parser.add_argument("-o", "--outname", type=str, default="outfile")
             parser.add_argument("-p", "--outpath", type=str, default="")
             parser.add_argument("-t", "--plottype", type=str, default="png", help="Choose from png, gif, mp4.")
+            parser.add_argument("-c", "--colorbarlims", type=str, default="[None, None]", help="List of two elements, containing the min and max colorbar limits.")
             args = parser.parse_args()
             try:
                 self.feeds       = np.array(eval(args.detectors))
                 self.sidebands   = np.array(eval(args.sidebands))
                 self.frequencies = np.array(eval(args.frequencies))
+                self.colorbarlims = np.array(eval(args.colorbarlims))
             except:
-                raise ValueError("Could not resolve detectors, sidebands, or frequencies as a Python iterable.")
+                raise ValueError("Could not resolve colorbarlims, detectors, sidebands, or frequencies as a Python iterable.")
             self.filename   = args.filename
             self.maptype    = args.maptype
             self.outpath    = args.outpath
@@ -50,6 +52,7 @@ class COMAP2PNG:
             self.outname     = outname
             self.filename    = filename
             self.plottype    = plottype
+            self.colorbarlims = np.array(colorbarlims)
             if len(filename) < 0:
                 raise ValueError("You must provide an input filename.")
             
@@ -190,20 +193,24 @@ class COMAP2PNG:
 
     
     def plot_maps(self):
-        x_lim, y_lim, color_lim = [None,None], [None,None], [None,None]
+        x_lim, y_lim = [None,None], [None,None]
+        color_lim = self.colorbarlims
 
         if self.maptype == "map":
             plotdata = self.map_out*1e6
-            color_lim[1] = 1*np.std(plotdata)
-            color_lim[0] = -color_lim[1]
+            if color_lim[0] is None or color_lim[1] is None:
+                color_lim[1] = 1*np.std(plotdata)
+                color_lim[0] = -color_lim[1]
             print("Portion of map inside crange: %.3f" % (np.sum(np.abs(plotdata) < color_lim[1])/np.size(plotdata)))
         elif self.maptype == "rms":
             plotdata = self.rms_out*1e6
-            color_lim = 0, 1*np.std(plotdata)
+            if color_lim[0] is None or color_lim[1] is None:
+                color_lim = 0, 1*np.std(plotdata)
             print("Portion of map inside crange: %.3f" % (np.sum(np.abs(plotdata) < color_lim[1])/np.size(plotdata)))
         elif self.maptype == "hit":
             plotdata = self.hit_out
-            color_lim = np.min(plotdata), np.max(plotdata)
+            if color_lim[0] is None or color_lim[1] is None:
+                color_lim = np.min(plotdata), np.max(plotdata)
         elif self.maptype == "map_rms":
             plotdata = self.map_out/self.rms_out
         elif self.maptype == "var":
