@@ -253,15 +253,13 @@ class COMAP2PNG:
             cmap_name = "CMRmap"
             cmap = copy.copy(plt.get_cmap(cmap_name))
             cmap.set_bad("0.8", 1) # Set color of masked elements to gray.
-            fig, ax = plt.subplots()
-            fig.set_figheight(5)
-            fig.set_figwidth(9)
+            fig, ax = plt.subplots(figsize=(10,6))
             ax.set_ylabel('Declination [deg]')
             ax.set_xlabel('Right Ascension [deg]')
-            ax.axis("equal")
+            aspect = dx/dy
             if self.plottype == "png":
                 img = ax.imshow(plotdata.T, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
-                                    aspect='equal', cmap=cmap, origin='lower',
+                                    aspect=aspect, cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
 
                 title = self.make_title()
@@ -308,7 +306,7 @@ class COMAP2PNG:
     def make_title(self):
         title = ""
         title += "Maptype: " + self.maptype + " | "
-        title += str(self.filename) + "\n"
+        title += str(self.filename).split("/")[-1] + "\n"
         if len(self.feeds) == 19:
             title += "Feeds: all"
         elif len(self.feeds) == 1:
