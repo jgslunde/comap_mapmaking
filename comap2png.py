@@ -291,7 +291,7 @@ class COMAP2PNG:
                     s = i//len(self.frequencies)
                     img.set_data(plotdata[s,f])
                     title = "Maptype: " + self.maptype + " | " + str(self.filename).split("/")[-1] + "\n"
-                    title += "Sideband %s | Channel %d | Freq %.2f GHz" % (self.sideband_names[s], i%64, self.freq[s,f])
+                    title += "Sideband %s | Channel %d | Freq %.2f GHz" % (self.sideband_names[s], i%64+1, self.freq[s,f])
                     ax.set_title(title)
                     return [img]
                 ani = animation.FuncAnimation(fig, update, frames=len(self.frequencies)*len(self.sidebands)+holdframes, interval=200, blit=False, repeat_delay=1000)
@@ -326,9 +326,9 @@ class COMAP2PNG:
         if len(self.frequencies) == 64:
             title += "All ch."
         elif len(self.frequencies) == 1:
-            title += "Ch.: %d | Freq: %.3f GHz" % (self.frequencies[0], self.freq[self.sidebands[0]][self.frequencies[0]])
+            title += "Ch.: %d | Freq: %.3f GHz" % (self.frequencies[0], self.freq[self.sidebands[0]-1][self.frequencies[0]-1])
         elif ((self.frequencies[1:] - self.frequencies[:-1]) == 1).all():
-            title += "Ch.: %d-%d | Freqs: %.3f - %.3f GHz" % ((self.frequencies[0], self.frequencies[-1], self.freq[self.sidebands[0]][self.frequencies[0]], self.freq[self.sidebands[0]][self.frequencies[-1]]))
+            title += "Ch.: %d-%d | Freqs: %.3f - %.3f GHz" % ((self.frequencies[0], self.frequencies[-1], self.freq[self.sidebands[0]-1][self.frequencies[0]-1], self.freq[self.sidebands[0]-1][self.frequencies[-1]-1]))
         else:
             title += "Ch.: " + ", ".join([str(freq) for freq in self.frequencies])
         return title
