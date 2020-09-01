@@ -132,10 +132,6 @@ class COMAP2PNG:
             self.hit_full = h5file["nhit"][self.indexing]
 
         self.num_feeds, self.num_bands, self.num_freqs, self.nx, self.ny = self.map_full.shape
-        print(self.map_full.shape)
-        self.map_full = np.transpose(self.map_full, (0,1,2,4,3))
-        self.rms_full = np.transpose(self.rms_full, (0,1,2,4,3))
-        self.hit_full = np.transpose(self.hit_full, (0,1,2,4,3))        
 
     def make_maps(self):
         
@@ -261,7 +257,7 @@ class COMAP2PNG:
             ax.set_xlabel('Right Ascension [deg]')
             aspect = dx/dy
             if self.plottype == "png":
-                img = ax.imshow(plotdata.T, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
+                img = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect=aspect, cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
 
@@ -275,10 +271,11 @@ class COMAP2PNG:
             elif self.plottype in ["mp4", "gif"]:
                 import matplotlib.animation as animation
 
-                img = ax.imshow(plotdata[0,0].T, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
+                img = ax.imshow(plotdata[0,0], extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect='equal', cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
-                fig.colorbar(img)
+                cbar = fig.colorbar(img)
+                cbar.set_label("$\mu K$")
 
                 if self.plottype == "mp4": # The first handful of frames stutter a lot (no idea why),
                     holdframes = 4         # so we render some static frames first (only an issue with mp4).
@@ -293,7 +290,7 @@ class COMAP2PNG:
                     f = i%len(self.frequencies)
                     s = i//len(self.frequencies)
                     img.set_data(plotdata[s,f])
-                    title = "Maptype: " + self.maptype + " | " + self.filename + "\n"
+                    title = "Maptype: " + self.maptype + " | " + str(self.filename).split("/")[-1] + "\n"
                     title += "Sideband %s | Channel %d | Freq %.2f GHz" % (self.sideband_names[s], i%64, self.freq[s,f])
                     ax.set_title(title)
                     return [img]
