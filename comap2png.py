@@ -272,7 +272,7 @@ class COMAP2PNG:
                 import matplotlib.animation as animation
 
                 img = ax.imshow(plotdata[0,0], extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
-                                    aspect='equal', cmap=cmap, origin='lower',
+                                    aspect=aspect, cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
                 cbar = fig.colorbar(img)
                 cbar.set_label("$\mu K$")
