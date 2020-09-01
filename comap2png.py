@@ -229,7 +229,6 @@ class COMAP2PNG:
         x_lim[0] = x[0] - 0.5*dx; x_lim[1] = x[-1] + 0.5*dx
         dy = y[1] - y[0]
         y_lim[0] = y[1] - 0.5*dy; y_lim[1] = y[-1] + 0.5*dy
-
         if USE_GNUPLOT:
             import PyGnuplot as gp
             
@@ -258,9 +257,9 @@ class COMAP2PNG:
             fig.set_figwidth(9)
             ax.set_ylabel('Declination [deg]')
             ax.set_xlabel('Right Ascension [deg]')
-            ax.axis("equal")
+            #ax.axis("equal")
             if self.plottype == "png":
-                img = ax.imshow(plotdata.T, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
+                img = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect='equal', cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
 
