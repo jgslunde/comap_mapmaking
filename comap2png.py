@@ -132,8 +132,11 @@ class COMAP2PNG:
             self.hit_full = h5file["nhit"][self.indexing]
 
         self.num_feeds, self.num_bands, self.num_freqs, self.nx, self.ny = self.map_full.shape
+        print(self.map_full.shape)
+        self.map_full = np.transpose(self.map_full, (0,1,2,4,3))
+        self.rms_full = np.transpose(self.rms_full, (0,1,2,4,3))
+        self.hit_full = np.transpose(self.hit_full, (0,1,2,4,3))        
 
-    
     def make_maps(self):
         
         map_full, rms_full, hit_full = self.map_full, self.rms_full, self.hit_full
