@@ -16,7 +16,7 @@ class COMAP2PNG:
 
         self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
         self.avail_plottypes = ["png", "gif", "mp4"]
-        self.sideband_names = ["A:LSB", "B:LSB", "A:USB", "B:USB"]
+        self.sideband_names = ["A:LSB", "A:USB", "B:LSB", "B:USB"]
 
         if from_commandline:
             parser = argparse.ArgumentParser()
