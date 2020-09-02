@@ -121,6 +121,8 @@ class COMAP2PNG:
                 
         if non_continuous > 1:
             raise ValueError("At most one of detectors, sidebands and frequencies may have gaps in their values (gap meaning ex: [1,2,3,6].)")
+
+        self.outname = self.outname.split(".")[0]  # Remove file endings for outfile name. It will be added later.
         
 
     def run(self):
