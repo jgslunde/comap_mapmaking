@@ -15,7 +15,7 @@ class COMAP2PNG:
     def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath="", plottype="png", colorbarlims="[None, None]"):
 
         self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
-        self.avail_plottypes = ["png", "gif", "mp4"]
+        self.avail_plottypes = ["png", "pdf", "gif", "mp4"]
         self.sideband_names = ["A:LSB", "B:LSB", "A:USB", "B:USB"]
 
         if from_commandline:
@@ -27,7 +27,7 @@ class COMAP2PNG:
             parser.add_argument("-m", "--maptype", type=str, default="map")
             parser.add_argument("-o", "--outname", type=str, default="outfile")
             parser.add_argument("-p", "--outpath", type=str, default="")
-            parser.add_argument("-t", "--plottype", type=str, default="png", help="Choose from png, gif, mp4.")
+            parser.add_argument("-t", "--plottype", type=str, default="png", help="Choose from png, pdf, gif, mp4.")
             parser.add_argument("-c", "--colorbarlims", type=str, default="[None, None]", help="List of two elements, containing the min and max colorbar limits.")
             args = parser.parse_args()
             try:
@@ -157,7 +157,7 @@ class COMAP2PNG:
 
         else:  # Pure Numpy version.
             nx, ny = self.nx, self.ny
-            if self.plottype == "png":  # If we're plotting a png, we sum over sidebands/freqs.
+            if self.plottype == "png" or self.plottype == "pdf":  # If we're plotting a png, we sum over sidebands/freqs.
                 sum_axis = (0,1,2)      # If we're plotting a movie or gif, we don't.
             else:
                 sum_axis = (0)
@@ -184,7 +184,7 @@ class COMAP2PNG:
                 self.rms_out = np.sqrt(1.0/np.where(self.rms_out==0, np.inf, self.rms_out))
 
         if self.maptype == "feed":
-            if self.plottype == "png":
+            if self.plottype == "png" or self.plottype == "pdf":
                 hitbyfeed = np.sum(hit_full, axis=(1,2))
             elif self.plottype in ["gif", "mp4"]:
                 hitbyfeed = hit_full
@@ -248,24 +248,28 @@ class COMAP2PNG:
             import matplotlib
             import copy
             matplotlib.use("Agg")  # No idea what this is. It resolves an error when writing gif/mp4.
-            cmap_name = "CMRmap"
+            #cmap_name = "CMRmap"
+            cmap_name = "magma"
             cmap = copy.copy(plt.get_cmap(cmap_name))
             cmap.set_bad("0.8", 1) # Set color of masked elements to gray.
             fig, ax = plt.subplots(figsize=(10,6))
             ax.set_ylabel('Declination [deg]')
             ax.set_xlabel('Right Ascension [deg]')
             aspect = dx/dy
-            if self.plottype == "png":
+            if self.plottype == "png" or self.plottype == "pdf":
                 img = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect=aspect, cmap=cmap, origin='lower',
-                                    vmin=color_lim[0], vmax=color_lim[1])
+                                    vmin=color_lim[0], vmax=color_lim[1], rasterized = True)
 
                 title = self.make_title()
                 ax.set_title(title)
                 # ax.set_title("Sideband: %s | Channel: %d | Freq: %.3f GHz" % (self.sideband_names[s], i%64, self.freq[s,f]))
                 cbar = fig.colorbar(img)
                 cbar.set_label("$\mu K$")
-                fig.savefig(self.outpath + self.outname + ".png")
+                if self.plottype == "png":
+                    fig.savefig(self.outpath + self.outname + ".png")
+                else:
+                    fig.savefig(self.outpath + self.outname + ".pdf")
 
             elif self.plottype in ["mp4", "gif"]:
                 import matplotlib.animation as animation
