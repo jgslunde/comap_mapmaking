@@ -15,8 +15,10 @@ class COMAP2PNG:
     def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath="", plottype="png", colorbarlims="[None, None]"):
 
         self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
+
         self.avail_plottypes = ["png", "pdf", "gif", "mp4"]
-        self.sideband_names = ["A:LSB", "B:LSB", "A:USB", "B:USB"]
+
+        self.sideband_names = ["A:LSB", "A:USB", "B:LSB", "B:USB"]
 
         if from_commandline:
             parser = argparse.ArgumentParser()
@@ -30,13 +32,40 @@ class COMAP2PNG:
             parser.add_argument("-t", "--plottype", type=str, default="png", help="Choose from png, pdf, gif, mp4.")
             parser.add_argument("-c", "--colorbarlims", type=str, default="[None, None]", help="List of two elements, containing the min and max colorbar limits.")
             args = parser.parse_args()
-            try:
-                self.feeds       = np.array(eval(args.detectors))
-                self.sidebands   = np.array(eval(args.sidebands))
-                self.frequencies = np.array(eval(args.frequencies))
-                self.colorbarlims = np.array(eval(args.colorbarlims))
-            except:
-                raise ValueError("Could not resolve colorbarlims, detectors, sidebands, or frequencies as a Python iterable.")
+            self.feeds       = eval(args.detectors)
+            self.sidebands   = eval(args.sidebands)
+            self.frequencies = eval(args.frequencies)
+            self.colorbarlims = eval(args.colorbarlims)
+
+            # All list-like input can be integers, lists, or ranges, and will be converted to numpy arrays.
+            if isinstance(self.feeds, int):
+                self.feeds = np.array([self.feeds])
+            elif isinstance(self.feeds, (list, range)):
+                self.feeds = np.array(self.feeds)
+            else:
+                raise ValueError("Could not resolve feeds as a Python iterable.")
+
+            if isinstance(self.sidebands, int):
+                self.sidebands = np.array([self.sidebands])
+            elif isinstance(self.sidebands, (list, range)):
+                self.sidebands = np.array(self.sidebands)
+            else:
+                raise ValueError("Could not resolve sidebands as a Python iterable.")
+
+            if isinstance(self.frequencies, int):
+                self.frequencies = np.array([self.frequencies])
+            elif isinstance(self.frequencies, (list, range)):
+                self.frequencies = np.array(self.frequencies)
+            else:
+                raise ValueError("Could not resolve frequencies as a Python iterable.")
+
+            if isinstance(self.colorbarlims, int):
+                self.colorbarlims = np.array([self.colorbarlims])
+            elif isinstance(self.colorbarlims, (list, range)):
+                self.colorbarlims = np.array(self.colorbarlims)
+            else:
+                raise ValueError("Could not resolve colorbarlims as a Python iterable.")
+
             self.filename   = args.filename
             self.maptype    = args.maptype
             self.outpath    = args.outpath
@@ -94,6 +123,8 @@ class COMAP2PNG:
                 
         if non_continuous > 1:
             raise ValueError("At most one of detectors, sidebands and frequencies may have gaps in their values (gap meaning ex: [1,2,3,6].)")
+
+        self.outname = self.outname.split(".")[0]  # Remove file endings for outfile name. It will be added later.
         
 
     def run(self):
