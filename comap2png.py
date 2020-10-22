@@ -12,7 +12,7 @@ USE_CTYPES = False
 USE_GNUPLOT = False
 
 class COMAP2PNG:
-    def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath="", plottype="png", colorbarlims="[None, None]"):
+    def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath="", plottype="png", colorbarlims="[None, None]", noiselim = None):
 
         self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
 
@@ -31,6 +31,7 @@ class COMAP2PNG:
             parser.add_argument("-p", "--outpath", type=str, default="")
             parser.add_argument("-t", "--plottype", type=str, default="png", help="Choose from png, pdf, gif, mp4.")
             parser.add_argument("-c", "--colorbarlims", type=str, default="[None, None]", help="List of two elements, containing the min and max colorbar limits.")
+            parser.add_argument("-n", "--noiselim", type=float, default=None, help="Limit in rms beyond which the maps will be masked to NaN.")
             args = parser.parse_args()
             self.feeds       = eval(args.detectors)
             self.sidebands   = eval(args.sidebands)
@@ -71,6 +72,7 @@ class COMAP2PNG:
             self.outpath    = args.outpath
             self.outname    = args.outname
             self.plottype   = args.plottype
+            self.noiselim    = args.noiselim
 
         else:
             self.feeds       = np.array(feeds)
@@ -82,6 +84,7 @@ class COMAP2PNG:
             self.filename    = filename
             self.plottype    = plottype
             self.colorbarlims = np.array(colorbarlims)
+            self.noiselim    = noiselim
             if len(filename) < 0:
                 raise ValueError("You must provide an input filename.")
             
@@ -185,7 +188,6 @@ class COMAP2PNG:
                                         ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
             maplib.makemaps(map_full, rms_full, hit_full, map_out, rms_out, hit_out, nfeed, nband, nfreq, nx, ny)
 
-
         else:  # Pure Numpy version.
             nx, ny = self.nx, self.ny
             if self.plottype == "png" or self.plottype == "pdf":  # If we're plotting a png, we sum over sidebands/freqs.
@@ -220,6 +222,9 @@ class COMAP2PNG:
             elif self.plottype in ["gif", "mp4"]:
                 hitbyfeed = hit_full
             self.feed_out = np.sum(hitbyfeed > 0.01*self.hit_out, axis=0)
+        
+        if self.noiselim != None:
+            self.hit_out = np.where(self.rms_out < self.noiselim, self.hit_out, 0)
 
     
     def plot_maps(self):
