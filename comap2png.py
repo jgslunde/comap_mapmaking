@@ -12,7 +12,8 @@ USE_CTYPES = False
 USE_GNUPLOT = False
 
 class COMAP2PNG:
-    def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), maptype="map", outname="outfile", outpath="", plottype="png", colorbarlims="[None, None]", noiselim = None):
+    def __init__(self, from_commandline=True, filename="", feeds=range(1,20), sidebands=range(1,4), frequencies=range(1,65), 
+                maptype="map", outname="outfile", outpath="", plottype="png", colorbarlims="[None, None]", noiselim = None, wofigtitle = True):
 
         self.avail_maps = ["map", "rms", "map_rms", "sim", "rms_sim", "hit", "feed", "var"]
 
@@ -32,6 +33,7 @@ class COMAP2PNG:
             parser.add_argument("-t", "--plottype", type=str, default="png", help="Choose from png, pdf, gif, mp4.")
             parser.add_argument("-c", "--colorbarlims", type=str, default="[None, None]", help="List of two elements, containing the min and max colorbar limits.")
             parser.add_argument("-n", "--noiselim", type=float, default=None, help="Limit in rms beyond which the maps will be masked to NaN.")
+            parser.add_argument("-w", "--wofigtitle", action='store_false', help="If True the output map will not have a figure title.")
             args = parser.parse_args()
             self.feeds       = eval(args.detectors)
             self.sidebands   = eval(args.sidebands)
@@ -73,6 +75,7 @@ class COMAP2PNG:
             self.outname    = args.outname
             self.plottype   = args.plottype
             self.noiselim    = args.noiselim
+            self.wofigtitle   = args.wofigtitle
 
         else:
             self.feeds       = np.array(feeds)
@@ -85,6 +88,7 @@ class COMAP2PNG:
             self.plottype    = plottype
             self.colorbarlims = np.array(colorbarlims)
             self.noiselim    = noiselim
+            self.wofigtitle    = wofigtitle 
             if len(filename) < 0:
                 raise ValueError("You must provide an input filename.")
             
@@ -297,8 +301,9 @@ class COMAP2PNG:
                                     aspect=aspect, cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1], rasterized = True)
 
-                title = self.make_title()
-                ax.set_title(title)
+                if self.wofigtitle:
+                    title = self.make_title()
+                    ax.set_title(title)
                 # ax.set_title("Sideband: %s | Channel: %d | Freq: %.3f GHz" % (self.sideband_names[s], i%64, self.freq[s,f]))
                 cbar = fig.colorbar(img)
                 cbar.set_label("$\mu K$")
@@ -329,9 +334,10 @@ class COMAP2PNG:
                     f = i%len(self.frequencies)
                     s = i//len(self.frequencies)
                     img.set_data(plotdata[s,f])
-                    title = "Maptype: " + self.maptype + " | " + str(self.filename).split("/")[-1] + "\n"
-                    title += "Sideband %s | Channel %d | Freq %.2f GHz" % (self.sideband_names[s], i%64+1, self.freq[s,f])
-                    ax.set_title(title)
+                    if self.wofigtitle:
+                        title = "Maptype: " + self.maptype + " | " + str(self.filename).split("/")[-1] + "\n"
+                        title += "Sideband %s | Channel %d | Freq %.2f GHz" % (self.sideband_names[s], i%64+1, self.freq[s,f])
+                        ax.set_title(title)
                     return [img]
                 ani = animation.FuncAnimation(fig, update, frames=len(self.frequencies)*len(self.sidebands)+holdframes, interval=200, blit=False, repeat_delay=1000)
 
