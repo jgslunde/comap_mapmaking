@@ -297,10 +297,10 @@ class COMAP2PNG:
             ax.set_xlabel('Right Ascension [deg]')
             aspect = dx/dy
             if self.plottype == "png" or self.plottype == "pdf":
-                img = ax.imshow(plotdata, extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
+                img = ax.imshow(plotdata[:,::-1], extent=(x_lim[1],x_lim[0],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect=aspect, cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1], rasterized = True)
-
+                
                 if self.wofigtitle:
                     title = self.make_title()
                     ax.set_title(title)
@@ -308,14 +308,14 @@ class COMAP2PNG:
                 cbar = fig.colorbar(img)
                 cbar.set_label("$\mu K$")
                 if self.plottype == "png":
-                    fig.savefig(self.outpath + self.outname + ".png")
+                    fig.savefig(self.outpath + self.outname + ".png", dpi=200)
                 else:
-                    fig.savefig(self.outpath + self.outname + ".pdf")
+                    fig.savefig(self.outpath + self.outname + ".pdf", dpi=200)
 
             elif self.plottype in ["mp4", "gif"]:
                 import matplotlib.animation as animation
 
-                img = ax.imshow(plotdata[0,0], extent=(x_lim[0],x_lim[1],y_lim[0],y_lim[1]), interpolation='nearest',
+                img = ax.imshow(plotdata[0,0,:,::-1], extent=(x_lim[1],x_lim[0],y_lim[0],y_lim[1]), interpolation='nearest',
                                     aspect=aspect, cmap=cmap, origin='lower',
                                     vmin=color_lim[0], vmax=color_lim[1])
                 cbar = fig.colorbar(img)
@@ -333,7 +333,7 @@ class COMAP2PNG:
                         i -= holdframes
                     f = i%len(self.frequencies)
                     s = i//len(self.frequencies)
-                    img.set_data(plotdata[s,f])
+                    img.set_data(plotdata[s,f,:,::-1])
                     if self.wofigtitle:
                         title = "Maptype: " + self.maptype + " | " + str(self.filename).split("/")[-1] + "\n"
                         title += "Sideband %s | Channel %d | Freq %.2f GHz" % (self.sideband_names[s], i%64+1, self.freq[s,f])
